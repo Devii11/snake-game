@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake Game</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #333;
+            font-family: Arial, sans-serif;
+        }
+        
+        .game-container {
+            text-align: center;
+        }
+        
+        canvas {
+            border: 2px solid #fff;
+            background-color: #000;
+        }
+        
+        .score {
+            color: #fff;
+            font-size: 24px;
+            margin: 20px 0;
+        }
+        
+        .controls {
+            color: #fff;
+            margin-top: 20px;
+        }
+        
+        .game-over {
+            color: #ff0000;
+            font-size: 32px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1 style="color: #fff;">Snake Game</h1>
+        <div class="score">Score: <span id="score">0</span></div>
+        <canvas id="gameCanvas" width="400" height="400"></canvas>
+        <div class="controls">
+            Use arrow keys to control the snake<br>
+            Red food = +10 points, Blue food = cuts snake in half, Yellow food = 50% speed boost (1 min)<br>
+            Snake wraps around edges - no walls! Press SPACE to restart
+        </div>
+        <div id="gameOver" class="game-over" style="display: none;">Game Over!</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const gameOverElement = document.getElementById('gameOver');
+
+        const gridSize = 20;
+        const tileCount = canvas.width / gridSize;
+
+        let snake = [
+            {x: 10, y: 10}
+        ];
+        let dx = 0;
+        let dy = 0;
+        let foodX = 15;
+        let foodY = 15;
+        let score = 0;
+        let gameRunning = true;
+        let blueFoodX = -1;
+        let blueFoodY = -1;
+        let blueFoodTimer = 0;
+        let yellowFoodX = -1;
+        let yellowFoodY = -1;
+        let yellowFoodTimer = 0;
+        let gameSpeed = 100;
+        let speedBoostEndTime = 0;
+
+        function drawGame() {
+            if (!gameRunning) return;
+
+            clearScreen();
+            moveSnake();
+            drawSnake();
+            drawFood();
+            drawBlueFood();
+            drawYellowFood();
+            checkCollision();
+            checkFoodCollision();
+            checkBlueFoodCollision();
+            checkYellowFoodCollision();
+            updateBlueFood();
+            updateYellowFood();
+            updateGameSpeed();
+        }
+
+        function clearScreen() {
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function drawSnake() {
+            ctx.fillStyle = 'lime';
+            for (let segment of snake) {
+                ctx.fillRect(segment.x * gridSize, segment.y * gridSize, gridSize - 2, gridSize - 2);
+            }
+        }
+
+        function moveSnake() {
+            const head = {x: snake[0].x + dx, y: snake[0].y + dy};
+            
+            if (head.x < 0) head.x = tileCount - 1;
+            if (head.x >= tileCount) head.x = 0;
+            if (head.y < 0) head.y = tileCount - 1;
+            if (head.y >= tileCount) head.y = 0;
+            
+            snake.unshift(head);
+
+            if (head.x !== foodX && head.y !== foodY) {
+                snake.pop();
+            }
+        }
+
+        function drawFood() {
+            ctx.fillStyle = 'red';
+            ctx.fillRect(foodX * gridSize, foodY * gridSize, gridSize - 2, gridSize - 2);
+        }
+
+        function drawBlueFood() {
+            if (blueFoodX >= 0 && blueFoodY >= 0) {
+                ctx.fillStyle = 'blue';
+                ctx.fillRect(blueFoodX * gridSize, blueFoodY * gridSize, gridSize - 2, gridSize - 2);
+            }
+        }
+
+        function drawYellowFood() {
+            if (yellowFoodX >= 0 && yellowFoodY >= 0) {
+                ctx.fillStyle = 'yellow';
+                ctx.fillRect(yellowFoodX * gridSize, yellowFoodY * gridSize, gridSize - 2, gridSize - 2);
+            }
+        }
+
+        function checkCollision() {
+            const head = snake[0];
+
+            for (let i = 1; i < snake.length; i++) {
+                if (head.x === snake[i].x && head.y === snake[i].y) {
+                    gameOver();
+                    return;
+                }
+            }
+        }
+
+        function checkFoodCollision() {
+            if (snake[0].x === foodX && snake[0].y === foodY) {
+                score += 10;
+                scoreElement.textContent = score;
+                generateFood();
+            }
+        }
+
+        function checkBlueFoodCollision() {
+            if (blueFoodX >= 0 && blueFoodY >= 0 && snake[0].x === blueFoodX && snake[0].y === blueFoodY) {
+                cutSnakeInHalf();
+                blueFoodX = -1;
+                blueFoodY = -1;
+                blueFoodTimer = 0;
+            }
+        }
+
+        function cutSnakeInHalf() {
+            const newLength = Math.max(1, Math.floor(snake.length / 2));
+            snake = snake.slice(0, newLength);
+        }
+
+        function checkYellowFoodCollision() {
+            if (yellowFoodX >= 0 && yellowFoodY >= 0 && snake[0].x === yellowFoodX && snake[0].y === yellowFoodY) {
+                activateSpeedBoost();
+                yellowFoodX = -1;
+                yellowFoodY = -1;
+                yellowFoodTimer = 0;
+            }
+        }
+
+        function activateSpeedBoost() {
+            gameSpeed = Math.max(25, Math.floor(gameSpeed * 0.5));
+            speedBoostEndTime = Date.now() + 60000;
+            updateGameInterval();
+        }
+
+        function updateGameInterval() {
+            clearInterval(gameInterval);
+            gameInterval = setInterval(drawGame, gameSpeed);
+        }
+
+        function updateGameSpeed() {
+            if (speedBoostEndTime > 0 && Date.now() > speedBoostEndTime) {
+                gameSpeed = 100;
+                speedBoostEndTime = 0;
+                updateGameInterval();
+            }
+        }
+
+        function generateFood() {
+            foodX = Math.floor(Math.random() * tileCount);
+            foodY = Math.floor(Math.random() * tileCount);
+
+            for (let segment of snake) {
+                if (segment.x === foodX && segment.y === foodY) {
+                    generateFood();
+                    return;
+                }
+            }
+        }
+
+        function generateBlueFood() {
+            blueFoodX = Math.floor(Math.random() * tileCount);
+            blueFoodY = Math.floor(Math.random() * tileCount);
+
+            for (let segment of snake) {
+                if (segment.x === blueFoodX && segment.y === blueFoodY) {
+                    generateBlueFood();
+                    return;
+                }
+            }
+
+            if (blueFoodX === foodX && blueFoodY === foodY) {
+                generateBlueFood();
+                return;
+            }
+        }
+
+        function updateBlueFood() {
+            blueFoodTimer++;
+
+            if (blueFoodX < 0 && blueFoodTimer > 100 && Math.random() < 0.01) {
+                generateBlueFood();
+                blueFoodTimer = 0;
+            }
+
+            if (blueFoodX >= 0 && blueFoodTimer > 50) {
+                blueFoodX = -1;
+                blueFoodY = -1;
+                blueFoodTimer = 0;
+            }
+        }
+
+        function generateYellowFood() {
+            yellowFoodX = Math.floor(Math.random() * tileCount);
+            yellowFoodY = Math.floor(Math.random() * tileCount);
+
+            for (let segment of snake) {
+                if (segment.x === yellowFoodX && segment.y === yellowFoodY) {
+                    generateYellowFood();
+                    return;
+                }
+            }
+
+            if (yellowFoodX === foodX && yellowFoodY === foodY) {
+                generateYellowFood();
+                return;
+            }
+
+            if (yellowFoodX === blueFoodX && yellowFoodY === blueFoodY) {
+                generateYellowFood();
+                return;
+            }
+        }
+
+        function updateYellowFood() {
+            yellowFoodTimer++;
+
+            if (yellowFoodX < 0 && yellowFoodTimer > 100 && Math.random() < 0.02) {
+                generateYellowFood();
+                yellowFoodTimer = 0;
+            }
+
+            if (yellowFoodX >= 0 && yellowFoodTimer > 100) {
+                yellowFoodX = -1;
+                yellowFoodY = -1;
+                yellowFoodTimer = 0;
+            }
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            gameOverElement.style.display = 'block';
+        }
+
+        function restartGame() {
+            snake = [{x: 10, y: 10}];
+            dx = 0;
+            dy = 0;
+            score = 0;
+            scoreElement.textContent = score;
+            gameRunning = true;
+            gameOverElement.style.display = 'none';
+            blueFoodX = -1;
+            blueFoodY = -1;
+            blueFoodTimer = 0;
+            yellowFoodX = -1;
+            yellowFoodY = -1;
+            yellowFoodTimer = 0;
+            gameSpeed = 100;
+            speedBoostEndTime = 0;
+            generateFood();
+            updateGameInterval();
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (!gameRunning && e.code === 'Space') {
+                restartGame();
+                return;
+            }
+
+            if (!gameRunning) return;
+
+            switch(e.code) {
+                case 'ArrowUp':
+                    if (dy === 0) {
+                        dx = 0;
+                        dy = -1;
+                    }
+                    break;
+                case 'ArrowDown':
+                    if (dy === 0) {
+                        dx = 0;
+                        dy = 1;
+                    }
+                    break;
+                case 'ArrowLeft':
+                    if (dx === 0) {
+                        dx = -1;
+                        dy = 0;
+                    }
+                    break;
+                case 'ArrowRight':
+                    if (dx === 0) {
+                        dx = 1;
+                        dy = 0;
+                    }
+                    break;
+            }
+        });
+
+        generateFood();
+        let gameInterval = setInterval(drawGame, gameSpeed);
+    </script>
+</body>
+</html>
