@@ -122,7 +122,7 @@
             
             snake.unshift(head);
 
-            if (head.x !== foodX && head.y !== foodY) {
+            if (head.x !== foodX || head.y !== foodY) {
                 snake.pop();
             }
         }
@@ -189,7 +189,7 @@
         }
 
         function activateSpeedBoost() {
-            gameSpeed = Math.max(25, Math.floor(gameSpeed * 0.5));
+            gameSpeed = Math.min(200, gameSpeed * 2);
             speedBoostEndTime = Date.now() + 60000;
             updateGameInterval();
         }
